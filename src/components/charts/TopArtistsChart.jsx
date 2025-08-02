@@ -16,9 +16,15 @@ const TopArtistsChart = ({ data, loading = false, period = "overall" }) => {
 
   useEffect(() => {
     if (data && data.length > 0) {
+      // Transform data for the chart
+      const chartData = data.slice(0, 10).map(artist => ({
+        name: artist.name,
+        playcount: parseInt(artist.playcount)
+      }))
+      
       // Animate data entry
       const timer = setTimeout(() => {
-        setAnimatedData(data.slice(0, 10))
+        setAnimatedData(chartData)
       }, 300)
       return () => clearTimeout(timer)
     }

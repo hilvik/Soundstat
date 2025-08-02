@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Music, Play, Users, Clock, TrendingUp, Sparkles, Volume2, Heart } from 'lucide-react'
+import { useUserInfo, useRecentTracks, useListeningStats } from '../../hooks/useLastFm'
+import { formatNumber, formatRelativeTime, isNowPlaying, getArtistNames, getImageUrl } from '../../utils/formatters'
 
 // Import new components
 import SplitText from '../ui/TextAnimations/SplitText'
@@ -70,8 +72,8 @@ const MusicWaveVisualizer = () => {
   )
 }
 
-// Enhanced Hero Section
-const EnhancedHero = () => {
+// Enhanced Hero Section with real user data
+const EnhancedHero = ({ username }) => {
   return (
     <div className="relative min-h-[60vh] flex items-center justify-center overflow-hidden">
       {/* Background Effects */}
@@ -98,7 +100,7 @@ const EnhancedHero = () => {
           
           <div className="mb-4">
             <TextTrail
-              text="Your Music Universe"
+              text={username ? `${username}'s Music Universe` : "Your Music Universe"}
               className="text-5xl md:text-7xl font-bold justify-center"
             />
           </div>
@@ -175,9 +177,34 @@ const EnhancedStatsCard = ({ title, value, icon, gradient, delay = 0 }) => {
   )
 }
 
-// Enhanced Now Playing Card
+// Enhanced Now Playing Card with real data
 const EnhancedNowPlayingCard = () => {
-  const [isPlaying, setIsPlaying] = useState(true)
+  const { data: recentTracks, isLoading } = useRecentTracks(1)
+  const currentTrack = recentTracks?.recenttracks?.track?.[0]
+  const isPlaying = currentTrack && isNowPlaying(currentTrack)
+  
+  if (isLoading) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8, delay: 0.4 }}
+      >
+        <FluidGlass className="p-6" variant="strong">
+          <div className="animate-pulse">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-white/20 rounded-xl" />
+              <div className="flex-1">
+                <div className="h-4 bg-white/20 rounded w-24 mb-2" />
+                <div className="h-5 bg-white/20 rounded w-48 mb-1" />
+                <div className="h-4 bg-white/20 rounded w-32" />
+              </div>
+            </div>
+          </div>
+        </FluidGlass>
+      </motion.div>
+    )
+  }
   
   return (
     <motion.div
@@ -190,8 +217,20 @@ const EnhancedNowPlayingCard = () => {
         <FluidGlass className="p-6" variant="strong">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                <Music className="h-8 w-8 text-white" />
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center overflow-hidden">
+                {currentTrack ? (
+                  getImageUrl(currentTrack.image, 'medium') ? (
+                    <img 
+                      src={getImageUrl(currentTrack.image, 'medium')} 
+                      alt={currentTrack.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Music className="h-8 w-8 text-white" />
+                  )
+                ) : (
+                  <Music className="h-8 w-8 text-white" />
+                )}
               </div>
               {isPlaying && (
                 <motion.div
@@ -202,18 +241,32 @@ const EnhancedNowPlayingCard = () => {
               )}
             </div>
             
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <Volume2 className="h-4 w-4 text-green-400" />
                 <SplitText 
-                  text="Now Playing" 
+                  text={isPlaying ? "Now Playing" : "Last Played"} 
                   className="text-sm font-medium text-green-400"
                   variant="scale"
                   duration={0.1}
                 />
               </div>
-              <h4 className="font-semibold text-white mb-1">Discovering Your Music...</h4>
-              <p className="text-sm text-gray-400">Connect your Last.fm account</p>
+              {currentTrack ? (
+                <>
+                  <h4 className="font-semibold text-white mb-1 truncate">{currentTrack.name}</h4>
+                  <p className="text-sm text-gray-400 truncate">{getArtistNames(currentTrack)}</p>
+                  {!isPlaying && currentTrack.date && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatRelativeTime(currentTrack.date.uts)}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <h4 className="font-semibold text-white mb-1">No recent tracks</h4>
+                  <p className="text-sm text-gray-400">Start scrobbling to see your music here</p>
+                </>
+              )}
             </div>
           </div>
         </FluidGlass>
@@ -222,27 +275,75 @@ const EnhancedNowPlayingCard = () => {
   )
 }
 
-// Main Enhanced Dashboard
+// Main Enhanced Dashboard with real data
 const EnhancedDashboard = () => {
-  const mockStats = [
-    { title: "Total Scrobbles", value: "42,069", icon: Music, gradient: "from-purple-500 to-pink-500", delay: 0.1 },
-    { title: "Top Artist", value: "Loading", icon: Users, gradient: "from-blue-500 to-purple-500", delay: 0.2 },
-    { title: "Hours Listened", value: "1,337", icon: Clock, gradient: "from-green-500 to-blue-500", delay: 0.3 },
-    { title: "Artists Discovered", value: "2,420", icon: TrendingUp, gradient: "from-orange-500 to-red-500", delay: 0.4 },
+  const { data: userInfo, isLoading: userLoading } = useUserInfo()
+  const { data: stats, isLoading: statsLoading } = useListeningStats('overall')
+  const { data: recentTracks } = useRecentTracks(10)
+  
+  const loading = userLoading || statsLoading
+  
+  const statsData = [
+    { 
+      title: "Total Scrobbles", 
+      value: stats?.totalScrobbles || 0, 
+      icon: Music, 
+      gradient: "from-purple-500 to-pink-500", 
+      delay: 0.1 
+    },
+    { 
+      title: "Unique Artists", 
+      value: stats?.uniqueArtists || 0, 
+      icon: Users, 
+      gradient: "from-blue-500 to-purple-500", 
+      delay: 0.2 
+    },
+    { 
+      title: "Hours Listened", 
+      value: stats?.listeningTime || 0, 
+      icon: Clock, 
+      gradient: "from-green-500 to-blue-500", 
+      delay: 0.3 
+    },
+    { 
+      title: "Daily Average", 
+      value: stats?.averageDaily || 0, 
+      icon: TrendingUp, 
+      gradient: "from-orange-500 to-red-500", 
+      delay: 0.4 
+    },
   ]
+  
+  if (loading) {
+    return (
+      <div className="space-y-8 p-6">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              className="w-16 h-16 border-t-2 border-purple-500 rounded-full mx-auto mb-4"
+            />
+            <p className="text-white/70">Loading your music universe...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
   
   return (
     <div className="space-y-8 p-6">
       {/* Hero Section */}
       <FluidGlass className="p-8 relative overflow-hidden" variant="strong">
-        <EnhancedHero />
+        <EnhancedHero username={userInfo?.user?.name} />
       </FluidGlass>
       
       {/* Profile Card */}
       <ProfileCard 
-        name="Music Explorer"
-        totalScrobbles={42069}
-        topArtist="The Beatles"
+        name={userInfo?.user?.name || "Music Explorer"}
+        totalScrobbles={stats?.totalScrobbles || 0}
+        topArtist={recentTracks?.recenttracks?.track?.[0]?.artist?.['#text'] || "Loading..."}
+        avatar={getImageUrl(userInfo?.user?.image)}
       />
       
       {/* Now Playing Section */}
@@ -250,7 +351,7 @@ const EnhancedDashboard = () => {
       
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {mockStats.map((stat, index) => (
+        {statsData.map((stat, index) => (
           <EnhancedStatsCard
             key={index}
             title={stat.title}

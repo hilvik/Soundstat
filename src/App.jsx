@@ -1,52 +1,44 @@
 import React from 'react'
-import { Routes, Route } from 'react-router-dom'
-import { useThemeStore } from './store/themeStore'
-import MusicStory from './pages/MusicStory'
-import Layout from './components/layout/Layout'
-import Dashboard from './pages/Dashboard'
-import Artists from './pages/Artists'
-import Tracks from './pages/Tracks'
-import Albums from './pages/Albums'
-import Insights from './pages/Insights'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import Dashboard from './pages/redesign/Dashboard'
+import Timeline from './pages/redesign/Timeline'
+import Artists from './pages/redesign/Artists'
+import Tracks from './pages/redesign/Tracks'
+import Insights from './pages/redesign/Insights'
 
 function App() {
-  const { isDarkMode } = useThemeStore()
-
   return (
-    <div className={`min-h-screen transition-all duration-500 ${isDarkMode ? 'dark' : ''}`}>
+    <div className="min-h-screen bg-gray-50">
       <Routes>
-        {/* Story Mode - Full immersive experience */}
-        <Route path="/" element={<MusicStory />} />
+        {/* Redesigned Routes */}
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/timeline" element={<Timeline />} />
+        <Route path="/artists" element={<Artists />} />
+        <Route path="/tracks" element={<Tracks />} />
+        <Route path="/insights" element={<Insights />} />
         
-        {/* Traditional Dashboard Mode */}
-        <Route path="/dashboard/*" element={
-          <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 dark:from-black dark:via-purple-950 dark:to-black min-h-screen">
-            {/* Background Pattern */}
-            <div className="fixed inset-0 opacity-20 pointer-events-none">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,_rgba(255,255,255,0.1)_1px,_transparent_0)] bg-[size:20px_20px]" />
-            </div>
-            
-            {/* Animated Background Orbs */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl animate-pulse-slow" />
-              <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500/20 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }} />
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }} />
-            </div>
-            
-            <Layout>
-              <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/artists" element={<Artists />} />
-                <Route path="/tracks" element={<Tracks />} />
-                <Route path="/albums" element={<Albums />} />
-                <Route path="/insights" element={<Insights />} />
-              </Routes>
-            </Layout>
-          </div>
-        } />
+        {/* Redirect old routes to new ones */}
+        <Route path="/dashboard/*" element={<Navigate to="/" replace />} />
+        <Route path="/albums" element={<Navigate to="/tracks" replace />} />
+        
+        {/* 404 Page */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
   )
 }
+
+// 404 Component
+const NotFound = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="text-center">
+      <h1 className="text-9xl font-bold text-gray-200">404</h1>
+      <p className="text-xl text-gray-600 mt-4">Page not found</p>
+      <a href="/" className="mt-6 inline-block px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
+        Go Home
+      </a>
+    </div>
+  </div>
+)
 
 export default App

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { Search, Filter, Play, ExternalLink, Heart } from 'lucide-react'
 import AnimatedCard from '../components/ui/AnimatedCard'
@@ -6,50 +6,21 @@ import GradientText from '../components/ui/GradientText'
 import TimeRangePicker from '../components/ui/TimeRangePicker'
 import FilterTabs from '../components/ui/FilterTabs'
 import LoadingSpinner from '../components/ui/LoadingSpinner'
+import { useTopArtists } from '../hooks/useLastFm'
+import { formatNumber, getImageUrl } from '../utils/formatters'
 
 const Artists = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('overall')
   const [searchTerm, setSearchTerm] = useState('')
-  const [viewMode, setViewMode] = useState('grid') // 'grid' or 'list'
-  const [loading, setLoading] = useState(true)
-  const [artists, setArtists] = useState([])
-  const [filteredArtists, setFilteredArtists] = useState([])
-
-  // Mock data - replace with real API call
-  const mockArtists = useMemo(() => [
-    { name: 'The Beatles', playcount: 2547, image: null, mbid: '1', url: '#' },
-    { name: 'Pink Floyd', playcount: 2234, image: null, mbid: '2', url: '#' },
-    { name: 'Led Zeppelin', playcount: 1987, image: null, mbid: '3', url: '#' },
-    { name: 'Queen', playcount: 1745, image: null, mbid: '4', url: '#' },
-    { name: 'The Rolling Stones', playcount: 1623, image: null, mbid: '5', url: '#' },
-    { name: 'David Bowie', playcount: 1456, image: null, mbid: '6', url: '#' },
-    { name: 'Radiohead', playcount: 1334, image: null, mbid: '7', url: '#' },
-    { name: 'The Who', playcount: 1287, image: null, mbid: '8', url: '#' },
-    { name: 'AC/DC', playcount: 1198, image: null, mbid: '9', url: '#' },
-    { name: 'Metallica', playcount: 1156, image: null, mbid: '10', url: '#' }
-  ], [])
-
-  useEffect(() => {
-    // Simulate API call
-    const timer = setTimeout(() => {
-      setArtists(mockArtists)
-      setFilteredArtists(mockArtists)
-      setLoading(false)
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [selectedPeriod, mockArtists])
-
-  useEffect(() => {
-    // Filter artists based on search term
-    if (searchTerm) {
-      const filtered = artists.filter(artist =>
+  const [viewMode, setViewMode] = useState('grid')
+  const { data, isLoading, error } = useTopArtists(selectedPeriod, 50)
+  
+  const artists = data?.topartists?.artist || []
+  const filteredArtists = searchTerm 
+    ? artists.filter(artist =>
         artist.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
-      setFilteredArtists(filtered)
-    } else {
-      setFilteredArtists(artists)
-    }
-  }, [searchTerm, artists])
+    : artists
 
   const viewTabs = [
     { value: 'grid', label: 'Grid', icon: <div className="w-3 h-3 bg-current rounded-sm" /> },
@@ -67,8 +38,16 @@ const Artists = () => {
       <AnimatedCard className="p-4 h-full hover:shadow-2xl transition-all duration-300">
         <div className="flex items-start gap-4">
           {/* Artist Image/Initial */}
-          <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white font-bold text-xl">
-            {artist.name.charAt(0)}
+          <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white font-bold text-xl overflow-hidden">
+            {getImageUrl(artist.image) ? (
+              <img 
+                src={getImageUrl(artist.image)} 
+                alt={artist.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              artist.name.charAt(0)
+            )}
           </div>
           
           {/* Artist Info */}
@@ -78,7 +57,7 @@ const Artists = () => {
             </h3>
             <div className="flex items-center gap-2 text-white/70 text-sm mb-2">
               <Play className="w-4 h-4" />
-              <span>{artist.playcount.toLocaleString()} plays</span>
+              <span>{formatNumber(artist.playcount)} plays</span>
             </div>
             <div className="flex items-center gap-2">
               <Motion.button
@@ -88,13 +67,16 @@ const Artists = () => {
               >
                 <Heart className="w-4 h-4" />
               </Motion.button>
-              <Motion.button
+              <Motion.a
+                href={artist.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
                 className="p-2 bg-white/10 rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-all"
               >
                 <ExternalLink className="w-4 h-4" />
-              </Motion.button>
+              </Motion.a>
             </div>
           </div>
           
@@ -122,8 +104,16 @@ const Artists = () => {
         </div>
         
         {/* Artist Image/Initial */}
-        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white font-bold">
-          {artist.name.charAt(0)}
+        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center text-white font-bold overflow-hidden">
+          {getImageUrl(artist.image, 'small') ? (
+            <img 
+              src={getImageUrl(artist.image, 'small')} 
+              alt={artist.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            artist.name.charAt(0)
+          )}
         </div>
         
         {/* Artist Info */}
@@ -133,7 +123,7 @@ const Artists = () => {
           </h3>
           <div className="flex items-center gap-2 text-white/70 text-sm">
             <Play className="w-4 h-4" />
-            <span>{artist.playcount.toLocaleString()} plays</span>
+            <span>{formatNumber(artist.playcount)} plays</span>
           </div>
         </div>
         
@@ -146,24 +136,39 @@ const Artists = () => {
           >
             <Heart className="w-4 h-4" />
           </Motion.button>
-          <Motion.button
+          <Motion.a
+            href={artist.url}
+            target="_blank"
+            rel="noopener noreferrer"
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             className="p-2 bg-white/10 rounded-full text-white/70 hover:text-white hover:bg-white/20 transition-all"
           >
             <ExternalLink className="w-4 h-4" />
-          </Motion.button>
+          </Motion.a>
         </div>
       </AnimatedCard>
     </Motion.div>
   )
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-screen">
         <div className="text-center">
           <LoadingSpinner size="xl" className="mx-auto mb-4" />
           <p className="text-white/70">Loading your top artists...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-6xl mb-4">😢</div>
+          <h3 className="text-xl font-bold text-white mb-2">Something went wrong</h3>
+          <p className="text-white/70">{error.message}</p>
         </div>
       </div>
     )
@@ -250,16 +255,16 @@ const Artists = () => {
         >
           {filteredArtists.map((artist, index) => (
             viewMode === 'grid' ? (
-              <ArtistCard key={artist.mbid} artist={artist} index={index} />
+              <ArtistCard key={`${artist.mbid || artist.name}-${index}`} artist={artist} index={index} />
             ) : (
-              <ArtistListItem key={artist.mbid} artist={artist} index={index} />
+              <ArtistListItem key={`${artist.mbid || artist.name}-${index}`} artist={artist} index={index} />
             )
           ))}
         </Motion.div>
       </AnimatePresence>
 
       {/* Empty State */}
-      {filteredArtists.length === 0 && !loading && (
+      {filteredArtists.length === 0 && !isLoading && (
         <Motion.div
           initial={{ opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
