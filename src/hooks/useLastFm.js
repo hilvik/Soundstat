@@ -1,5 +1,8 @@
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { lastFmService } from '../services/lastfm'
+import { api } from '../services/api'
+
+// ===== EXISTING LAST.FM API HOOKS =====
 
 // User Info Hook
 export const useUserInfo = () => {
@@ -189,5 +192,96 @@ export const useListeningTrends = (username, period = '7day') => {
       return trendData
     },
     staleTime: 1000 * 60 * 60, // 1 hour
+  })
+}
+
+// ===== NEW BACKEND API HOOKS =====
+
+// Backend Overview Stats
+export const useBackendStats = () => {
+  return useQuery({
+    queryKey: ['backendStats'],
+    queryFn: api.getOverviewStats,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  })
+}
+
+// Backend Top Artists
+export const useBackendTopArtists = (period = 'overall', limit = 50) => {
+  return useQuery({
+    queryKey: ['backendTopArtists', period, limit],
+    queryFn: () => api.getTopArtists(period, limit),
+    staleTime: 1000 * 60 * 30, // 30 minutes
+  })
+}
+
+// Backend Top Tracks
+export const useBackendTopTracks = (period = 'overall', limit = 50) => {
+  return useQuery({
+    queryKey: ['backendTopTracks', period, limit],
+    queryFn: () => api.getTopTracks(period, limit),
+    staleTime: 1000 * 60 * 30, // 30 minutes
+  })
+}
+
+// Backend Listening Patterns
+export const useBackendListeningPatterns = () => {
+  return useQuery({
+    queryKey: ['backendListeningPatterns'],
+    queryFn: api.getListeningPatterns,
+    staleTime: 1000 * 60 * 60, // 1 hour
+  })
+}
+
+// Backend Genre Distribution
+export const useBackendGenreDistribution = () => {
+  return useQuery({
+    queryKey: ['backendGenreDistribution'],
+    queryFn: api.getGenreDistribution,
+    staleTime: 1000 * 60 * 60, // 1 hour
+  })
+}
+
+// Sync Status
+export const useSyncStatus = () => {
+  return useQuery({
+    queryKey: ['syncStatus'],
+    queryFn: async () => {
+      // This would be a backend endpoint to check sync status
+      // For now, return mock data
+      return {
+        lastSync: new Date().toISOString(),
+        totalScrobbles: 0,
+        status: 'idle'
+      }
+    },
+    staleTime: 1000 * 60, // 1 minute
+  })
+}
+
+// Manual Sync Mutation
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+
+export const useManualSync = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: api.syncNow,
+    onSuccess: () => {
+      // Invalidate all backend queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['backend'] })
+    },
+  })
+}
+
+// Import All Data Mutation
+export const useImportAllData = () => {
+  const queryClient = useQueryClient()
+  
+  return useMutation({
+    mutationFn: api.importAll,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['backend'] })
+    },
   })
 }
