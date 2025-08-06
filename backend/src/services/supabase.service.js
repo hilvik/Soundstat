@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const supabaseUrl = process.env.SUPABASE_URL
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY // Use service key for backend
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
@@ -107,7 +110,24 @@ export const supabaseService = {
 
   // Get overview stats
   async getOverviewStats() {
-    const { data: totalCounts } = await supabase.rpc('get_total_counts')
+    // Get total counts
+    const { count: totalScrobbles } = await supabase
+      .from('scrobbles')
+      .select('*', { count: 'exact', head: true })
+    
+    const { count: totalArtists } = await supabase
+      .from('artists')
+      .select('*', { count: 'exact', head: true })
+    
+    const { count: totalTracks } = await supabase
+      .from('tracks')
+      .select('*', { count: 'exact', head: true })
+    
+    const { count: totalAlbums } = await supabase
+      .from('albums')
+      .select('*', { count: 'exact', head: true })
+    
+    // Get recent daily stats
     const { data: recentStats } = await supabase
       .from('daily_stats')
       .select('*')
@@ -115,8 +135,13 @@ export const supabaseService = {
       .limit(7)
     
     return {
-      totalCounts,
-      recentStats
+      totalCounts: {
+        scrobbles: totalScrobbles || 0,
+        artists: totalArtists || 0,
+        tracks: totalTracks || 0,
+        albums: totalAlbums || 0
+      },
+      recentStats: recentStats || []
     }
   },
 
@@ -208,7 +233,7 @@ export const supabaseService = {
       .slice(0, limit)
   },
 
-  // Get or create tag stats
+  // Update tag stats
   async updateTagStats(tags, date) {
     for (const tag of tags) {
       const { error } = await supabase

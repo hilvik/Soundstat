@@ -2,6 +2,7 @@ import express from 'express'
 import { lastfmService } from '../services/lastfm.service.js'
 import { supabaseService } from '../services/supabase.service.js'
 import { processScrobbles } from '../services/aggregation.service.js'
+import { BatchImportService } from '../services/batch-import.service.js'
 
 const router = express.Router()
 
@@ -32,13 +33,38 @@ router.post('/manual', async (req, res) => {
   }
 })
 
-// Full historical import
+// Optimized full import
+router.post('/import-all-optimized', async (req, res) => {
+  try {
+    const batchImporter = new BatchImportService()
+    
+    // Return immediately and run in background
+    res.json({ 
+      message: 'Optimized import started. Check logs for progress.',
+      note: 'This uses batch processing and should be much faster!'
+    })
+    
+    // Run import in background
+    batchImporter.importAllData(progress => {
+      console.log(`Import progress: ${progress.current}/${progress.total} pages (${progress.scrobbles} scrobbles)`)
+    }).then(result => {
+      console.log('Import completed successfully:', result)
+    }).catch(error => {
+      console.error('Import failed:', error)
+    })
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Full historical import (old method - kept for compatibility)
 router.post('/import-all', async (req, res) => {
   try {
     // This is a long operation - in production, use a job queue
     res.json({ 
       message: 'Import started. Check logs for progress.',
-      note: 'This will take several minutes for large libraries'
+      note: 'This will take several minutes for large libraries. Use /import-all-optimized for faster import.'
     })
     
     // Import in background
@@ -52,6 +78,25 @@ router.post('/import-all', async (req, res) => {
       console.error('Import failed:', error)
     })
     
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get import status
+router.get('/status', async (req, res) => {
+  try {
+    const { count: totalScrobbles } = await supabaseService.supabase
+      .from('scrobbles')
+      .select('*', { count: 'exact', head: true })
+    
+    const latestScrobble = await supabaseService.getLatestScrobbleTime()
+    
+    res.json({
+      totalScrobbles: totalScrobbles || 0,
+      latestScrobble: latestScrobble,
+      status: 'ready'
+    })
   } catch (error) {
     res.status(500).json({ error: error.message })
   }

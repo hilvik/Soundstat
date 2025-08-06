@@ -1,173 +1,131 @@
-import { supabaseService, supabase } from './supabase.service.js'
+import express from 'express'
+import { supabaseService } from '../services/supabase.service.js'
 
-export async function processScrobbles(scrobbles) {
-  const processed = []
-  
-  for (const scrobble of scrobbles) {
-    // Skip currently playing
-    if (scrobble['@attr']?.nowplaying === 'true') continue
-    
-    try {
-      // Get or create artist
-      const artist = await supabaseService.getOrCreateArtist({
-        name: scrobble.artist['#text'] || scrobble.artist.name,
-        mbid: scrobble.artist.mbid || null,
-        image_url: scrobble.image?.[3]?.['#text'] || null,
-        lastfm_url: scrobble.url
-      })
-      
-      // Get or create album if exists
-      let album = null
-      if (scrobble.album?.['#text']) {
-        album = await supabaseService.getOrCreateAlbum({
-          name: scrobble.album['#text'],
-          artist_id: artist.id,
-          mbid: scrobble.album.mbid || null,
-          image_url: scrobble.image?.[3]?.['#text'] || null
-        })
-      }
-      
-      // Get or create track
-      const track = await supabaseService.getOrCreateTrack({
-        name: scrobble.name,
-        artist_id: artist.id,
-        album_id: album?.id || null,
-        mbid: scrobble.mbid || null,
-        duration: scrobble.duration || null,
-        lastfm_url: scrobble.url
-      })
-      
-      // Create scrobble entry
-      const scrobbleData = {
-        track_id: track.id,
-        played_at: new Date(scrobble.date.uts * 1000).toISOString(),
-        device_source: null // Last.fm doesn't provide this
-      }
-      
-      processed.push(scrobbleData)
-    } catch (error) {
-      console.error('Error processing scrobble:', error, scrobble)
-    }
-  }
-  
-  // Batch insert scrobbles
-  if (processed.length > 0) {
-    await supabaseService.insertScrobbles(processed)
-  }
-  
-  return processed
-}
+const router = express.Router()
 
-export async function calculateDailyStats(date) {
-  const startDate = new Date(date)
-  startDate.setHours(0, 0, 0, 0)
-  const endDate = new Date(date)
-  endDate.setHours(23, 59, 59, 999)
-  
-  // Get all scrobbles for the day
-  const { data: dayScrobbles, error } = await supabase
-    .from('scrobbles')
-    .select(`
-      id,
-      played_at,
-      track:tracks(
-        id,
-        name,
-        artist:artists(id, name),
-        album:albums(id, name)
-      )
-    `)
-    .gte('played_at', startDate.toISOString())
-    .lte('played_at', endDate.toISOString())
-  
-  if (error) throw error
-  
-  // Calculate stats
-  const stats = {
-    date: startDate.toISOString().split('T')[0],
-    total_scrobbles: dayScrobbles.length,
-    unique_tracks: new Set(dayScrobbles.map(s => s.track.id)).size,
-    unique_artists: new Set(dayScrobbles.map(s => s.track.artist.id)).size,
-    unique_albums: new Set(dayScrobbles.filter(s => s.track.album).map(s => s.track.album.id)).size,
-    listening_time_minutes: Math.round(dayScrobbles.length * 3.5), // Estimate
-    new_discoveries: 0 // TODO: Calculate new tracks
+// Get overview stats
+router.get('/overview', async (req, res) => {
+  try {
+    const stats = await supabaseService.getOverviewStats()
+    res.json(stats)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
   }
-  
-  await supabaseService.updateDailyStats(stats.date, stats)
-  
-  // Update hourly stats
-  await calculateHourlyStats(dayScrobbles)
-  
-  return stats
-}
+})
 
-export async function calculateHourlyStats(scrobbles) {
-  const hourlyData = {}
-  
-  // Initialize all hours
-  for (let hour = 0; hour < 24; hour++) {
-    hourlyData[hour] = 0
-  }
-  
-  // Count scrobbles per hour
-  scrobbles.forEach(scrobble => {
-    const hour = new Date(scrobble.played_at).getHours()
-    hourlyData[hour]++
-  })
-  
-  // Update in database
-  for (const [hour, count] of Object.entries(hourlyData)) {
-    const { error } = await supabase
-      .from('hourly_stats')
-      .upsert({
-        hour: parseInt(hour),
-        total_scrobbles: count,
-        avg_scrobbles: count // TODO: Calculate rolling average
-      })
-    
-    if (error) console.error('Error updating hourly stats:', error)
-  }
-}
-
-// Add these methods to supabaseService.js
-export const additionalSupabaseMethods = {
-  async getOrCreateAlbum(albumData) {
-    const { data: existing } = await supabase
-      .from('albums')
+// Get daily stats for a specific date
+router.get('/daily/:date', async (req, res) => {
+  try {
+    const { date } = req.params
+    const { data, error } = await supabaseService.supabase
+      .from('daily_stats')
       .select('*')
-      .eq('name', albumData.name)
-      .eq('artist_id', albumData.artist_id)
-      .single()
-    
-    if (existing) return existing
-
-    const { data, error } = await supabase
-      .from('albums')
-      .insert([albumData])
-      .select()
+      .eq('date', date)
       .single()
     
     if (error) throw error
-    return data
-  },
+    res.json(data || {})
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
 
-  async getOrCreateTrack(trackData) {
-    const { data: existing } = await supabase
-      .from('tracks')
-      .select('*')
-      .eq('name', trackData.name)
-      .eq('artist_id', trackData.artist_id)
-      .single()
+// Get listening patterns
+router.get('/patterns', async (req, res) => {
+  try {
+    const hourlyStats = await supabaseService.getHourlyStats()
+    res.json({ hourly: hourlyStats })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get top artists
+router.get('/top/artists', async (req, res) => {
+  try {
+    const { period = 'overall', limit = 50 } = req.query
+    const artists = await supabaseService.getTopArtists(period, parseInt(limit))
+    res.json({ artists })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get top tracks
+router.get('/top/tracks', async (req, res) => {
+  try {
+    const { period = 'overall', limit = 50 } = req.query
     
-    if (existing) return existing
+    // For now, we'll return data from Last.fm API since we haven't implemented track aggregation
+    res.json({ 
+      message: 'Track aggregation not yet implemented. Use Last.fm API directly.',
+      tracks: []
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
 
-    const { data, error } = await supabase
-      .from('tracks')
-      .insert([trackData])
-      .select()
-      .single()
+// Get top albums
+router.get('/top/albums', async (req, res) => {
+  try {
+    const { period = 'overall', limit = 50 } = req.query
+    
+    // For now, we'll return data from Last.fm API since we haven't implemented album aggregation
+    res.json({ 
+      message: 'Album aggregation not yet implemented. Use Last.fm API directly.',
+      albums: []
+    })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Get trends for a period
+router.get('/trends/:period', async (req, res) => {
+  try {
+    const { period } = req.params
+    const days = period === '7day' ? 7 : period === '1month' ? 30 : 90
+    
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days)
+    
+    const { data, error } = await supabaseService.supabase
+      .from('daily_stats')
+      .select('*')
+      .gte('date', startDate.toISOString().split('T')[0])
+      .lte('date', endDate.toISOString().split('T')[0])
+      .order('date', { ascending: true })
     
     if (error) throw error
-    return data
+    res.json(data || [])
+  } catch (error) {
+    res.status(500).json({ error: error.message })
   }
-}
+})
+
+// Get genre distribution
+router.get('/genres', async (req, res) => {
+  try {
+    const { data, error } = await supabaseService.supabase
+      .from('tag_stats')
+      .select('*')
+      .order('play_count', { ascending: false })
+      .limit(20)
+    
+    if (error) throw error
+    
+    const genres = (data || []).map(tag => ({
+      genre: tag.tag_name,
+      count: tag.play_count,
+      percentage: 0 // Would need to calculate based on total
+    }))
+    
+    res.json(genres)
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+export default router

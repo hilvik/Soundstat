@@ -1,4 +1,7 @@
 import axios from 'axios'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY
 const LASTFM_USERNAME = process.env.LASTFM_USERNAME
@@ -18,14 +21,14 @@ export const lastfmService = {
       })
       return response.data
     } catch (error) {
-      console.error(`Last.fm API error for ${method}:`, error)
+      console.error(`Last.fm API error for ${method}:`, error.message)
       throw error
     }
   },
 
   async getRecentTracks(from = null, limit = 200) {
     const params = { limit, extended: 1 }
-    if (from) params.from = Math.floor(from / 1000)
+    if (from) params.from = Math.floor(from.getTime() / 1000)
     
     return this.makeRequest('user.getrecenttracks', params)
   },
